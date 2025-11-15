@@ -1,0 +1,11 @@
+"""Revision Script"""
+revision = "${up_revision}"
+down_revision = ${down_revision | repr}
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    pass
+
+def downgrade():
+    pass
