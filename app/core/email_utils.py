@@ -1,32 +1,31 @@
-import smtplib
-from email.mime.text import MIMEText
+import sendgrid
+from sendgrid.helpers.mail import Mail
+from app.core.config import settings
 
 
-def send_email(to_email: str, subject: str, body: str):
+def send_reset_email(to_email: str, reset_link: str):
     """
-    Utilidad básica para enviar correos.
-    Se puede integrar en /auth/forgot en el futuro.
+    Envía email de recuperación usando SendGrid.
     """
 
-    sender = "no-reply@multiversegamer.com"
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-    smtp_user = ""   # tu email
-    smtp_pass = ""   # tu contraseña o app password
+    sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
 
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = sender
-    msg["To"] = to_email
+    message = Mail(
+        from_email="no-reply@multiversegamer.com",
+        to_emails=to_email,
+        subject="Recupera tu contraseña - Multiverse Gamer",
+        html_content=f"""
+        <h2>Restablecer contraseña</h2>
+        <p>Haz clic en el siguiente enlace para cambiar tu contraseña:</p>
+        <p><a href="{reset_link}">{reset_link}</a></p>
+        <br>
+        <p>Este enlace es válido por 15 minutos.</p>
+        """
+    )
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(sender, [to_email], msg.as_string())
-        server.quit()
+        sg.send(message)
         return True
-
     except Exception as e:
-        print("Error enviando email:", e)
+        print("SendGrid error:", e)
         return False

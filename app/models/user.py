@@ -12,10 +12,11 @@ class User(Base):
     email = Column(String(120), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
 
-    # Basic / Pro / Elite
     plan = Column(String(20), default="BASIC")
-
-    # Para identificar dispositivo actual
     last_device = Column(String(255), nullable=True)
+
+    # Recuperación de contraseña (SendGrid)
+    reset_token = Column(String(255), nullable=True)
+    reset_token_expire = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
