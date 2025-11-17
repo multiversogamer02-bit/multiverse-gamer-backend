@@ -11,7 +11,7 @@ app = FastAPI(
     description="Backend oficial para Multiverse Gamer Launcher"
 )
 
-# Crea tablas automáticamente (si no existen)
+# Crear tablas automáticamente (si no existen)
 Base.metadata.create_all(bind=engine)
 
 # CORS
@@ -33,3 +33,10 @@ app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 @app.get("/")
 def root():
     return {"status": "ok", "service": "Multiverse Gamer Backend"}
+
+# --------------------------------------------------------------
+# 🔥 NUEVO: ENDPOINT health (necesario para el launcher)
+# --------------------------------------------------------------
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
