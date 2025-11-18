@@ -1,31 +1,26 @@
-from datetime import datetime, timedelta
-from jose import jwt, JWTError
+# app/core/security.py
+
 from passlib.context import CryptContext
-from fastapi import HTTPException, status
+from passlib.exc import PasswordValueError
 
-from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12
+)
 
 def hash_password(password: str) -> str:
+    """
+    Hashea la contraseña. Passlib lanza PasswordValueError si supera los 72 bytes.
+    """
     return pwd_context.hash(password)
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
 
-def create_access_token(data: dict, expires_minutes: int = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(
-        minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-def decode_token(token: str):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verifica contraseña.
+    """
     try:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado"
-        )
+        return pwd_context.verify(plain_password, hashed_password)
+    except PasswordValueError:
+        return False

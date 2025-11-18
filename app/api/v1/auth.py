@@ -1,45 +1,45 @@
+# app/api/v1/auth.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.schemas.user import UserCreate, UserLogin, UserOut
-from app.core.security import hash_password, verify_password
+from app.db.session import get_db
 from app.crud.crud_user import (
     create_user,
-    get_user_by_email,
+    authenticate_user,
+    get_user_by_email
 )
-from app.db.session import get_db
 
 router = APIRouter()
 
+@router.post("/register")
+def register_user(data: dict, db: Session = Depends(get_db)):
+    email = data.get("email")
+    username = data.get("username")
+    password = data.get("password")
 
-@router.post("/register", response_model=UserOut)
-def register_user(data: UserCreate, db: Session = Depends(get_db)):
-    existing = get_user_by_email(db, data.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="El email ya está registrado.")
+    if not email or not username or not password:
+        raise HTTPException(status_code=400, detail="Faltan campos obligatorios.")
 
-    # HASH CORRECTO
-    hashed = hash_password(data.password)
+    if len(password) > 72:
+        raise HTTPException(status_code=400, detail="La contraseña no puede superar los 72 caracteres.")
 
-    # CREATE USER CORRECTAMENTE
-    user = create_user(
-        db=db,
-        username=data.username,
-        email=data.email,
-        hashed_password=hashed,
-        plan="BASIC"
-    )
+    exists = get_user_by_email(db, email)
+    if exists:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado.")
 
-    return user
+    user = create_user(db, email=email, username=username, password=password)
+
+    return {"success": True, "user_id": user.id}
 
 
-@router.post("/login", response_model=UserOut)
-def login_user(data: UserLogin, db: Session = Depends(get_db)):
-    user = get_user_by_email(db, data.email)
+@router.post("/login")
+def login_user(data: dict, db: Session = Depends(get_db)):
+    email = data.get("email")
+    password = data.get("password")
+
+    user = authenticate_user(db, email, password)
     if not user:
-        raise HTTPException(status_code=400, detail="Email o contraseña incorrectos.")
+        raise HTTPException(status_code=400, detail="Credenciales inválidas.")
 
-    if not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Email o contraseña incorrectos.")
-
-    return user
+    return {"success": True, "user_id": user.id, "email": user.email}
