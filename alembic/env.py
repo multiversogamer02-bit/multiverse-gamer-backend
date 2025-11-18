@@ -1,50 +1,48 @@
+import os
+import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool, create_engine
 
-# Importar settings y Base del proyecto
-from app.core.config import settings
-from app.db.base import Base
+# -------------------------------------------------------
+# Añadir ruta del proyecto
+# -------------------------------------------------------
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, BASE_DIR)
 
-# Importar modelos para que Alembic los detecte
-from app.models.user import User  # noqa: F401
-from app.models.plan import Plan  # noqa: F401
-from app.models.session import Session  # noqa: F401
+# -------------------------------------------------------
+# Importar Base y modelos
+# -------------------------------------------------------
+from backend.app.db.base import Base
+from backend.app.models.user import User
+from backend.app.models.plan import Plan
+from backend.app.models.session import Session
 
-# -------------------------------------------------------------------
-# Configuración básica de Alembic
-# -------------------------------------------------------------------
-
+# -------------------------------------------------------
 config = context.config
 
-# Si hay archivo de logging de Alembic, lo cargamos
-if config.config_file_name is not None:
+# Registro de logs
+if config.config_file_name:
     fileConfig(config.config_file_name)
 
-# target_metadata se usa para autogenerate
+# Metadatos de modelos
 target_metadata = Base.metadata
 
-# -------------------------------------------------------------------
-# Configuración de la URL de la base de datos
-# -------------------------------------------------------------------
-# Si hay DATABASE_URL en settings (Render / .env), se usa esa.
-# Si NO hay (entorno local sin .env), usamos SQLite para generar migraciones.
-# Esto evita el error "option values must be strings".
+# -----------------------------
+# Cargar URL desde variable de entorno
+# -----------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-DATABASE_URL = settings.DATABASE_URL or "sqlite:///./local_migrations.db"
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no está definida en las variables de entorno.")
+
+# Reemplazar por URL real
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
-# -------------------------------------------------------------------
-# Funciones de migración OFFLINE / ONLINE
-# -------------------------------------------------------------------
-
-def run_migrations_offline() -> None:
-    """Ejecuta migraciones en modo 'offline'.
-
-    No necesita un engine real, solo la URL.
-    """
+def run_migrations_offline():
+    """Modo offline: genera SQL sin ejecutar en DB."""
     url = config.get_main_option("sqlalchemy.url")
 
     context.configure(
@@ -58,14 +56,10 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Ejecuta migraciones en modo 'online'.
-
-    Crea un engine y una conexión real.
-    """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
+def run_migrations_online():
+    """Modo online: conecta a la DB y ejecuta migrations."""
+    connectable = create_engine(
+        config.get_main_option("sqlalchemy.url"),
         poolclass=pool.NullPool,
     )
 
@@ -80,10 +74,7 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-# -------------------------------------------------------------------
-# Punto de entrada
-# -------------------------------------------------------------------
-
+# Ejecutar según modo
 if context.is_offline_mode():
     run_migrations_offline()
 else:
