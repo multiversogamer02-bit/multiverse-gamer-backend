@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import timedelta
 
 from app.db.session import get_db
 from app.crud.crud_user import (
@@ -9,8 +10,10 @@ from app.crud.crud_user import (
     authenticate_user,
     get_user_by_email
 )
+from app.core.security import create_access_token
 
 router = APIRouter()
+
 
 @router.post("/register")
 def register_user(data: dict, db: Session = Depends(get_db)):
@@ -21,8 +24,11 @@ def register_user(data: dict, db: Session = Depends(get_db)):
     if not email or not username or not password:
         raise HTTPException(status_code=400, detail="Faltan campos obligatorios.")
 
-    if len(password) > 72:
-        raise HTTPException(status_code=400, detail="La contraseña no puede superar los 72 caracteres.")
+    if len(password.encode("utf-8")) > 72:
+        raise HTTPException(
+            status_code=400,
+            detail="La contraseña excede el límite de 72 bytes (bcrypt)."
+        )
 
     exists = get_user_by_email(db, email)
     if exists:
@@ -42,4 +48,21 @@ def login_user(data: dict, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="Credenciales inválidas.")
 
-    return {"success": True, "user_id": user.id, "email": user.email}
+    access_token_expires = timedelta(hours=12)
+
+    access_token = create_access_token(
+        data={"user_id": user.id, "email": user.email},
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "success": True,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "plan": user.plan
+        }
+    }

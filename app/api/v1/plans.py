@@ -1,56 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.crud.crud_user import get_user_by_id, update_user_plan
+from app.core.auth_deps import get_current_user
+from app.crud.crud_user import update_user_plan
 from app.crud.crud_plan import get_plan_by_name, ensure_default_plans
 from app.schemas.plan import PlanOut
-from app.core.security import decode_token
 from app.integrations.mercadopago import create_payment_preference
 
 router = APIRouter()
 
 
-def get_current_user(db: Session, token: str):
-    """
-    Devuelve el usuario desde el JWT recibido.
-    """
-    payload = decode_token(token)
-    user_id = payload.get("user_id")
-
-    user = get_user_by_id(db, user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
-
-    return user
-
-
 @router.get("/info", response_model=PlanOut)
-def get_plan_info(db: Session = Depends(get_db), Authorization: str = None):
+def get_plan_info(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
     Devuelve los datos del plan actual del usuario.
     """
-
-    if Authorization is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token requerido"
-        )
-
-    token = Authorization.replace("Bearer ", "")
-    user = get_current_user(db, token)
-
     ensure_default_plans(db)
 
-    plan = get_plan_by_name(db, user.plan)
+    plan = get_plan_by_name(db, current_user.plan)
 
     if not plan:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Plan no existe"
         )
 
@@ -61,35 +36,25 @@ def get_plan_info(db: Session = Depends(get_db), Authorization: str = None):
 def upgrade_plan(
     target_plan: str,
     db: Session = Depends(get_db),
-    Authorization: str = None
+    current_user = Depends(get_current_user)
 ):
     """
     Crea un pago en Mercado Pago y devuelve el link.
     """
 
-    if Authorization is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token requerido"
-        )
-
-    token = Authorization.replace("Bearer ", "")
-    user = get_current_user(db, token)
-
     plan = get_plan_by_name(db, target_plan)
 
     if not plan:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="El plan seleccionado no existe"
         )
 
-    # Crear preferencia de pago MP
-    pref = create_payment_preference(user.id, target_plan)
+    pref = create_payment_preference(current_user.id, target_plan)
 
     if not pref:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Error al crear pago"
         )
 
