@@ -1,9 +1,5 @@
-from backend.app.models.user import User
-from backend.app.models.session import Session
-from backend.app.models.plan import Plan
+from .user import User
+from .plan import Plan
+from .session import Session
 
-__all__ = [
-    "User",
-    "Session",
-    "Plan",
-]
+__all__ = ["User", "Plan", "Session"]
