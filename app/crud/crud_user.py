@@ -45,3 +45,20 @@ def authenticate_user(db: Session, email: str, password: str):
         return None
 
     return user
+
+
+def update_user_plan(db: Session, user_id: int, new_plan: str):
+    """
+    Actualiza el plan de un usuario y devuelve el usuario actualizado.
+    Usado por:
+      - /plans/apply
+      - webhook de Mercado Pago
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+
+    user.plan = new_plan
+    db.commit()
+    db.refresh(user)
+    return user
