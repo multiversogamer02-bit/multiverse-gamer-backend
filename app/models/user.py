@@ -1,8 +1,8 @@
-# app/models/user.py
-
 from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
+from sqlalchemy.orm import relationship
 from app.db.base import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -16,3 +16,6 @@ class User(Base):
     reset_token = Column(String, nullable=True)
     reset_token_expire = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # 🔥 nueva relación con juegos
+    games = relationship("Game", back_populates="user", cascade="all, delete-orphan")
