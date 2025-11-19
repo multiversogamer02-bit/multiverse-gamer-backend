@@ -14,24 +14,30 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24hs
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 # ==========================
-# HASHING DE CONTRASEÑAS
+# HASHING SEGURO
 # ==========================
+# 🔥 IMPORTANTE:
+# bcrypt_sha256 evita:
+# - límite de 72 bytes
+# - bug del módulo bcrypt en Render
+# - conflictos con Python 3.12
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256"],
+    deprecated="auto"
+)
+
 
 def hash_password(password: str) -> str:
-    """Hashea una contraseña (limita máximo 72 bytes como requiere bcrypt)."""
-    if len(password.encode("utf-8")) > 72:
-        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    """
+    Genera un hash seguro sin el límite de 72 bytes,
+    y evita los bugs del módulo bcrypt.
+    """
     return pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verifica una contraseña contra su hash."""
-    if len(plain.encode("utf-8")) > 72:
-        plain = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    """Verifica una contraseña sin problemas de unicode ni longitud."""
     return pwd_context.verify(plain, hashed)
 
 
@@ -42,12 +48,10 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Genera un token JWT."""
     to_encode = data.copy()
-
     expire = datetime.now(timezone.utc) + (
         expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     to_encode.update({"exp": expire})
-
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
