@@ -17,15 +17,15 @@ WORKDIR /app
 # Copiar archivos de Poetry
 COPY pyproject.toml poetry.lock* /app/
 
-# Instalar dependencias con Poetry (sin crear entorno virtual)
+# Instalar dependencias con Poetry
 RUN poetry config virtualenvs.create false
 RUN poetry install --no-interaction --no-ansi
 
 # Copiar el proyecto completo
 COPY . /app
 
-# Exponer el puerto
-EXPOSE 8000
+# 🚀 IMPORTANTE: EXPOSE usa $PORT (Render lo inyecta)
+EXPOSE $PORT
 
-# Comando de ejecución
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 🚀 Comando de ejecución correcto para Render
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
