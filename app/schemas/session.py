@@ -1,19 +1,22 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 
-class SessionCreate(BaseModel):
-    user_id: int
+class SessionBase(BaseModel):
     device_id: str
+    ip_address: Optional[str] = None
 
 
-class SessionOut(BaseModel):
+class SessionCreate(SessionBase):
+    user_agent: Optional[str] = None
+
+
+class SessionResponse(SessionBase):
     id: int
     user_id: int
-    device_id: str
-    active: bool
-    started_at: datetime
-    ended_at: datetime | None = None
+    created_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True

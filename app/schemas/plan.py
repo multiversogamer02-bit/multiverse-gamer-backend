@@ -1,11 +1,21 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
-class PlanOut(BaseModel):
+class PlanBase(BaseModel):
     name: str
+    price: int
+    description: Optional[str] = None
     max_sessions: int
-    max_games: int
-    description: str | None = None
+    max_games: Optional[int] = None
+
+
+class PlanCreate(PlanBase):
+    pass
+
+
+class PlanResponse(PlanBase):
+    id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
