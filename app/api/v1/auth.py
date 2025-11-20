@@ -15,6 +15,10 @@ from app.core.security import create_access_token
 router = APIRouter()
 
 
+# ==============================================================
+# REGISTRO
+# ==============================================================
+
 @router.post("/register")
 def register_user(data: dict, db: Session = Depends(get_db)):
     email = data.get("email")
@@ -23,12 +27,6 @@ def register_user(data: dict, db: Session = Depends(get_db)):
 
     if not email or not username or not password:
         raise HTTPException(status_code=400, detail="Faltan campos obligatorios.")
-
-    if len(password.encode("utf-8")) > 72:
-        raise HTTPException(
-            status_code=400,
-            detail="La contraseña excede el límite de 72 bytes (bcrypt)."
-        )
 
     exists = get_user_by_email(db, email)
     if exists:
@@ -39,14 +37,26 @@ def register_user(data: dict, db: Session = Depends(get_db)):
     return {"success": True, "user_id": user.id}
 
 
+# ==============================================================
+# LOGIN (CORREGIDO → ACEPTA device_id)
+# ==============================================================
+
 @router.post("/login")
 def login_user(data: dict, db: Session = Depends(get_db)):
     email = data.get("email")
     password = data.get("password")
+    device_id = data.get("device_id", None)  # <-- aceptamos y no falla
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Credenciales inválidas.")
 
     user = authenticate_user(db, email, password)
     if not user:
         raise HTTPException(status_code=400, detail="Credenciales inválidas.")
+
+    # (Opcional) Puedes almacenar el device_id en una tabla de sesiones
+    # if device_id:
+    #     register_device(user.id, device_id)
 
     access_token_expires = timedelta(hours=12)
 
