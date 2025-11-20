@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
+from datetime import datetime
+
 from app.db.base import Base
 
 
@@ -13,5 +15,9 @@ class Game(Base):
     platform = Column(String, nullable=False)
     path = Column(String, nullable=False)
     cover = Column(String, nullable=True)
+
+    # Para sincronización
+    checksum = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="games")
