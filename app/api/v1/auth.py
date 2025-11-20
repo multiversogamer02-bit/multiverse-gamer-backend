@@ -8,8 +8,7 @@ from app.db.session import get_db
 from app.crud.crud_user import (
     create_user,
     authenticate_user,
-    get_user_by_email,
-    get_user_by_id
+    get_user_by_email
 )
 from app.core.security import create_access_token
 from app.api.v1.auth_deps import get_current_user
@@ -17,9 +16,9 @@ from app.api.v1.auth_deps import get_current_user
 router = APIRouter()
 
 
-# ==============================================================
+# =====================================================================
 # REGISTRO
-# ==============================================================
+# =====================================================================
 
 @router.post("/register")
 def register_user(data: dict, db: Session = Depends(get_db)):
@@ -38,15 +37,14 @@ def register_user(data: dict, db: Session = Depends(get_db)):
     return {"success": True, "user_id": user.id}
 
 
-# ==============================================================
+# =====================================================================
 # LOGIN
-# ==============================================================
+# =====================================================================
 
 @router.post("/login")
 def login_user(data: dict, db: Session = Depends(get_db)):
     email = data.get("email")
     password = data.get("password")
-    device_id = data.get("device_id")  # opcional
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Credenciales inválidas.")
@@ -75,15 +73,12 @@ def login_user(data: dict, db: Session = Depends(get_db)):
     }
 
 
-# ==============================================================
-# PERFIL DEL USUARIO /auth/me  **(NUEVO – OBLIGATORIO)
-# ==============================================================
+# =====================================================================
+# PERFIL /auth/me
+# =====================================================================
 
 @router.get("/me")
 def get_me(current_user=Depends(get_current_user)):
-    """
-    Devuelve el usuario autenticado usando el token.
-    """
     return {
         "id": current_user.id,
         "email": current_user.email,
