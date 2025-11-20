@@ -1,9 +1,9 @@
+# app/core/security.py
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 import os
-
 
 # ==========================
 # CONFIGURACIÓN JWT
@@ -13,33 +13,27 @@ SECRET_KEY = os.getenv("JWT_SECRET", "ULTRA_SECRET_QUE_DEBES_CAMBIAR")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24hs
 
-
 # ==========================
 # HASHING SEGURO
 # ==========================
-# 🔥 IMPORTANTE:
-# bcrypt_sha256 evita:
-# - límite de 72 bytes
-# - bug del módulo bcrypt en Render
-# - conflictos con Python 3.12
+# Compatibilidad completa:
+# - bcrypt (hashes antiguos)
+# - bcrypt_sha256 (nuevo y recomendado)
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256"],
+    schemes=["bcrypt_sha256", "bcrypt"],   # Orden: primero el más seguro
     deprecated="auto"
 )
 
-
 def hash_password(password: str) -> str:
-    """
-    Genera un hash seguro sin el límite de 72 bytes,
-    y evita los bugs del módulo bcrypt.
-    """
+    """Genera un hash seguro con bcrypt_sha256 por defecto."""
     return pwd_context.hash(password)
 
-
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verifica una contraseña sin problemas de unicode ni longitud."""
-    return pwd_context.verify(plain, hashed)
-
+    """Verifica una contraseña con soporte para bcrypt y bcrypt_sha256."""
+    try:
+        return pwd_context.verify(plain, hashed)
+    except Exception:
+        return False
 
 # ==========================
 # TOKENS JWT
@@ -55,12 +49,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
-
 def verify_access_token(token: str):
-    """
-    Verifica y decodifica un token JWT.
-    Retorna el payload si es válido, o None si es inválido/expirado.
-    """
+    """Verifica y decodifica un token JWT."""
     try:
         decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return decoded
