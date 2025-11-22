@@ -1,52 +1,28 @@
-from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
+from pydantic import BaseModel, EmailStr, Field
 
 
-# ============================================================
-# ESQUEMA – SOLICITAR ENVÍO DE CÓDIGO
-# ============================================================
-
+# =========================================================
+# REQUEST: solicitar código de verificación
+# =========================================================
 class EmailVerificationRequest(BaseModel):
-    email: EmailStr = Field(..., description="Email al que se enviará el código")
+    email: EmailStr = Field(..., description="Email donde se enviará el código.")
 
 
-# ============================================================
-# ESQUEMA – RESPUESTA TRAS ENVIAR CÓDIGO
-# ============================================================
-
-class EmailVerificationSendResponse(BaseModel):
-    message: str = "Verification code sent successfully"
-    expires_at: datetime
-    attempt_limit: int = 5
-    code_length: int = 6
+# =========================================================
+# REQUEST: el usuario ingresa el código recibido
+# =========================================================
+class EmailCodeVerify(BaseModel):
+    email: EmailStr = Field(..., description="El email del usuario.")
+    code: str = Field(..., min_length=4, max_length=8, description="Código enviado al correo.")
 
 
-# ============================================================
-# ESQUEMA – VERIFICAR CÓDIGO
-# ============================================================
-
-class EmailVerificationCheck(BaseModel):
-    email: EmailStr
-    code: str = Field(..., min_length=6, max_length=6, description="6-digit alphanumeric code")
-
-
-# ============================================================
-# ESQUEMA – RESPUESTA AL VERIFICAR CÓDIGO
-# ============================================================
-
-class EmailVerificationCheckResponse(BaseModel):
-    valid: bool
+# =========================================================
+# RESPONSE: respuesta estándar del backend
+# =========================================================
+class EmailVerificationResponse(BaseModel):
+    success: bool
     message: str
-    remaining_attempts: int
-
-
-# ============================================================
-# ESQUEMA – OBJETO ALMACENADO EN DB / REDIS
-# ============================================================
-
-class EmailVerificationData(BaseModel):
-    email: EmailStr
-    code: str
-    created_at: datetime
-    expires_at: datetime
-    attempts_left: int = 5
+    verified: bool | None = None
+    email: EmailStr | None = None
+    created_at: datetime | None = None
