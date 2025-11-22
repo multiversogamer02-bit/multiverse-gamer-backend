@@ -2,65 +2,85 @@
 
 from sqlalchemy.orm import Session
 from app.models.user import User
-from app.core.security import hash_password, verify_password, pwd_context
+from app.schemas.user import UserCreate
+from app.core.security import get_password_hash
 
-def get_user_by_email(db: Session, email: str):
-    return db.query(User).filter(User.email == email).first()
 
-def get_user_by_id(db: Session, user_id: int):
-    """Devuelve un usuario por ID."""
-    return db.query(User).filter(User.id == user_id).first()
+class CRUDUser:
 
-def create_user(db: Session, email: str, username: str, password: str):
-    hashed = hash_password(password)
+    # ============================================================
+    # OBTENER USUARIO
+    # ============================================================
 
-    user = User(
-        email=email,
-        username=username,
-        hashed_password=hashed,
-        plan="basic",
-    )
+    def get_by_email(self, db: Session, email: str):
+        return db.query(User).filter(User.email == email).first()
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    def get_by_username(self, db: Session, username: str):
+        return db.query(User).filter(User.username == username).first()
 
-def authenticate_user(db: Session, email: str, password: str):
-    """
-    Autentica usuarios con compatibilidad total:
-    - bcrypt (viejo)
-    - bcrypt_sha256 (nuevo)
-    Y migra automáticamente los hashes viejos al nuevo formato.
-    """
-    user = get_user_by_email(db, email)
-    if not user:
-        return None
+    def get(self, db: Session, user_id: int):
+        return db.query(User).filter(User.id == user_id).first()
 
-    # 1️⃣ Validar contraseña
-    valid = verify_password(password, user.hashed_password)
-    if not valid:
-        return None
+    # ============================================================
+    # CREAR USUARIO (NUEVO SISTEMA)
+    # ============================================================
 
-    # 2️⃣ Identificar el esquema actual del hash
-    current_scheme = pwd_context.identify(user.hashed_password)
+    def create_user(self, db: Session, payload: UserCreate):
+        """
+        Crea un usuario usando el sistema moderno:
+        - verified = False
+        - verification_attempts = 0
+        - password_hash = hash seguro
+        - plan básico por defecto
+        """
 
-    # 3️⃣ Migración automática si el hash es viejo
-    if current_scheme != "bcrypt_sha256":
-        new_hash = hash_password(password)
-        user.hashed_password = new_hash
+        db_user = User(
+            username=payload.username,
+            email=payload.email,
+            password_hash=get_password_hash(payload.password),
+
+            verified=False,
+            verification_attempts=0,
+
+            plan="BASIC"
+        )
+
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+
+    # ============================================================
+    # ACTUALIZAR CAMPOS
+    # ============================================================
+
+    def update(self, db: Session, user: User, new_values: dict):
+        for field, value in new_values.items():
+            setattr(user, field, value)
+
         db.commit()
         db.refresh(user)
+        return user
 
-    return user
+    # ============================================================
+    # MARCAR USUARIO COMO VERIFICADO
+    # ============================================================
 
-def update_user_plan(db: Session, user_id: int, new_plan: str):
-    """Actualiza el plan del usuario."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return None
+    def set_verified(self, db: Session, user: User):
+        user.verified = True
+        user.verification_attempts = 0
+        db.commit()
+        db.refresh(user)
+        return user
 
-    user.plan = new_plan
-    db.commit()
-    db.refresh(user)
-    return user
+    # ============================================================
+    # AUMENTAR INTENTOS (solo usado si fuera necesario)
+    # ============================================================
+
+    def increment_attempts(self, db: Session, user: User):
+        user.verification_attempts += 1
+        db.commit()
+        return user
+
+
+user_crud = CRUDUser()

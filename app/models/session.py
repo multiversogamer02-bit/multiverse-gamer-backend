@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
-from app.db.base import Base
+from app.database.base import Base
 
 
 class Session(Base):

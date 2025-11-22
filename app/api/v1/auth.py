@@ -1,87 +1,165 @@
 # app/api/v1/auth.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from app.db.session import get_db
-from app.crud.crud_user import (
-    create_user,
-    authenticate_user,
-    get_user_by_email
+from app.database.session import get_db
+from app.core.security import (
+    verify_password,
+    create_access_token,
+    create_refresh_token
 )
-from app.core.security import create_access_token
-from app.api.v1.auth_deps import get_current_user
+from app.core.config import settings
 
-router = APIRouter()
+from app.models.user import User
+from app.schemas.user import UserCreate, UserLogin, TokenResponse
+from app.schemas_email_verification import EmailVerificationRequest, EmailCodeVerify
+from app.crud.crud_user import user_crud
+from app.crud.crud_email_verification import (
+    send_verification_email,
+    verify_code as verify_email_code,
+    cleanup_expired_codes
+)
+
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-# =====================================================================
-# REGISTRO
-# =====================================================================
-
+# ---------------------------------------------------------
+# REGISTER NEW USER
+# ---------------------------------------------------------
 @router.post("/register")
-def register_user(data: dict, db: Session = Depends(get_db)):
-    email = data.get("email")
-    username = data.get("username")
-    password = data.get("password")
+def register_user(payload: UserCreate, db: Session = Depends(get_db)):
+    existing = user_crud.get_by_email(db, payload.email)
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
 
-    if not email or not username or not password:
-        raise HTTPException(status_code=400, detail="Faltan campos obligatorios.")
+    # Crear usuario (verified=False por defecto)
+    user = user_crud.create_user(db, payload)
 
-    exists = get_user_by_email(db, email)
-    if exists:
-        raise HTTPException(status_code=400, detail="El correo ya está registrado.")
+    # Enviar email de verificación profesional
+    result = send_verification_email(db, user)
 
-    user = create_user(db, email=email, username=username, password=password)
-    return {"success": True, "user_id": user.id}
+    if result.get("status") == "error":
+        raise HTTPException(
+            status_code=500,
+            detail="User created but email could not be sent"
+        )
+
+    return {
+        "message": "User registered successfully. Verification code sent.",
+        "cooldown": 60
+    }
 
 
-# =====================================================================
-# LOGIN
-# =====================================================================
+# ---------------------------------------------------------
+# SEND / RESEND VERIFICATION CODE
+# ---------------------------------------------------------
+@router.post("/send-code")
+def send_verification_code(payload: EmailVerificationRequest, db: Session = Depends(get_db)):
+    user = user_crud.get_by_email(db, payload.email)
 
-@router.post("/login")
-def login_user(data: dict, db: Session = Depends(get_db)):
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Credenciales inválidas.")
-
-    user = authenticate_user(db, email, password)
     if not user:
-        raise HTTPException(status_code=400, detail="Credenciales inválidas.")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    access_token_expires = timedelta(hours=12)
+    if user.verified:
+        return {"message": "User already verified"}
 
-    access_token = create_access_token(
-        data={"user_id": user.id, "email": user.email},
-        expires_delta=access_token_expires
+    result = send_verification_email(db, user)
+
+    if result["status"] == "cooldown":
+        raise HTTPException(
+            status_code=429,
+            detail=result["message"]
+        )
+
+    if result["status"] == "error":
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send verification email"
+        )
+
+    return {
+        "message": "Verification code sent",
+        "cooldown": 60
+    }
+
+
+# ---------------------------------------------------------
+# VERIFY CODE
+# ---------------------------------------------------------
+@router.post("/verify-code")
+def verify_code(payload: EmailCodeVerify, db: Session = Depends(get_db)):
+    user = user_crud.get_by_email(db, payload.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Demasiados intentos → bloqueo temporal
+    if user.verification_attempts >= settings.MAX_VERIFICATION_ATTEMPTS:
+        raise HTTPException(
+            status_code=403,
+            detail="Account locked due to too many failed attempts"
+        )
+
+    # Verificar código
+    valid = verify_email_code(db, user=user, code=payload.code)
+
+    if not valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    return {"message": "Email verified successfully"}
+
+
+# ---------------------------------------------------------
+# LOGIN → Only if email verified
+# ---------------------------------------------------------
+@router.post("/login", response_model=TokenResponse)
+def login(payload: UserLogin, db: Session = Depends(get_db)):
+    user = user_crud.get_by_email(db, payload.email)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verificación obligatoria antes del login
+    if not user.verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified"
+        )
+
+    # Validar contraseña
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password"
+        )
+
+    # Crear tokens JWT
+    access = create_access_token({"sub": str(user.id)})
+    refresh = create_refresh_token({"sub": str(user.id)})
+
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        token_type="bearer"
     )
 
-    return {
-        "success": True,
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "username": user.username,
-            "plan": user.plan
-        }
-    }
+
+# ---------------------------------------------------------
+# REFRESH TOKEN
+# ---------------------------------------------------------
+@router.post("/refresh")
+def refresh(token: str):
+    new_token = create_access_token({"sub": token})
+    return {"access_token": new_token}
 
 
-# =====================================================================
-# PERFIL /auth/me
-# =====================================================================
-
-@router.get("/me")
-def get_me(current_user=Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "username": current_user.username,
-        "plan": current_user.plan
-    }
+# ---------------------------------------------------------
+# STATUS ENDPOINT (OPTIONAL)
+# ---------------------------------------------------------
+@router.get("/status")
+def auth_status():
+    return {"status": "auth module OK"}
