@@ -1,86 +1,126 @@
-# app/crud/crud_user.py
-
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.core.security import get_password_hash
 
 
-class CRUDUser:
+# ---------------------------------------------------------
+# Obtener usuario por ID (NECESARIO PARA auth_deps)
+# ---------------------------------------------------------
+def get_user_by_id(db: Session, user_id: int) -> User | None:
+    """
+    Obtiene un usuario por su ID primario.
+    """
+    return db.query(User).filter(User.id == user_id).first()
 
-    # ============================================================
-    # OBTENER USUARIO
-    # ============================================================
 
-    def get_by_email(self, db: Session, email: str):
-        return db.query(User).filter(User.email == email).first()
+# ---------------------------------------------------------
+# Buscar usuario por email
+# ---------------------------------------------------------
+def get_user_by_email(db: Session, email: str) -> User | None:
+    """
+    Retorna un usuario por email.
+    """
+    return db.query(User).filter(User.email == email).first()
 
-    def get_by_username(self, db: Session, username: str):
-        return db.query(User).filter(User.username == username).first()
 
-    def get(self, db: Session, user_id: int):
-        return db.query(User).filter(User.id == user_id).first()
+# ---------------------------------------------------------
+# Crear usuario nuevo (registro)
+# ---------------------------------------------------------
+def create_user(db: Session, user: UserCreate, password_hash: str) -> User:
+    """
+    Crea un nuevo usuario con contraseña hasheada.
+    """
+    db_user = User(
+        email=user.email,
+        username=user.username,
+        password_hash=password_hash,
+        plan="basic",
+        is_verified=False,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(db_user)
 
-    # ============================================================
-    # CREAR USUARIO (NUEVO SISTEMA)
-    # ============================================================
-
-    def create_user(self, db: Session, payload: UserCreate):
-        """
-        Crea un usuario usando el sistema moderno:
-        - verified = False
-        - verification_attempts = 0
-        - password_hash = hash seguro
-        - plan básico por defecto
-        """
-
-        db_user = User(
-            username=payload.username,
-            email=payload.email,
-            password_hash=get_password_hash(payload.password),
-
-            verified=False,
-            verification_attempts=0,
-
-            plan="BASIC"
-        )
-
-        db.add(db_user)
+    try:
         db.commit()
         db.refresh(db_user)
-        return db_user
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
-    # ============================================================
-    # ACTUALIZAR CAMPOS
-    # ============================================================
+    return db_user
 
-    def update(self, db: Session, user: User, new_values: dict):
-        for field, value in new_values.items():
-            setattr(user, field, value)
 
+# ---------------------------------------------------------
+# Actualizar plan del usuario
+# ---------------------------------------------------------
+def update_user_plan(db: Session, user_id: int, new_plan: str) -> User | None:
+    """
+    Actualiza el plan del usuario (basic, pro, elite).
+    """
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    user.plan = new_plan
+    user.updated_at = datetime.utcnow()
+
+    try:
         db.commit()
         db.refresh(user)
-        return user
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
-    # ============================================================
-    # MARCAR USUARIO COMO VERIFICADO
-    # ============================================================
+    return user
 
-    def set_verified(self, db: Session, user: User):
-        user.verified = True
-        user.verification_attempts = 0
+
+# ---------------------------------------------------------
+# Actualizar contraseña
+# ---------------------------------------------------------
+def update_password(db: Session, user_id: int, new_password_hash: str) -> User | None:
+    """
+    Cambia la contraseña del usuario.
+    """
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    user.password_hash = new_password_hash
+    user.updated_at = datetime.utcnow()
+
+    try:
         db.commit()
         db.refresh(user)
-        return user
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
-    # ============================================================
-    # AUMENTAR INTENTOS (solo usado si fuera necesario)
-    # ============================================================
+    return user
 
-    def increment_attempts(self, db: Session, user: User):
-        user.verification_attempts += 1
+
+# ---------------------------------------------------------
+# Marcar email como verificado
+# ---------------------------------------------------------
+def set_verified(db: Session, user_id: int) -> User | None:
+    """
+    Marca un usuario como verificado.
+    """
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    user.is_verified = True
+    user.updated_at = datetime.utcnow()
+
+    try:
         db.commit()
-        return user
+        db.refresh(user)
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
-
-user_crud = CRUDUser()
+    return user
