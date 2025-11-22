@@ -46,3 +46,20 @@ class UserOut(BaseModel):
 # -----------------------------
 class UserInDB(UserOut):
     hashed_password: str
+
+
+# -----------------------------
+# TOKEN RESPONSE (FALTABA)
+# -----------------------------
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+# -----------------------------
+# REFRESH ENDPOINT RESPONSE
+# -----------------------------
+class RefreshTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
