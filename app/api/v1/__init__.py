@@ -14,7 +14,7 @@ api_router = APIRouter()
 
 # Rutas ya existentes
 api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
-api_router.include_router(users.router, prefix="/users", tags=["Users)")
+api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(plans.router, prefix="/plans", tags=["Plans"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
 api_router.include_router(games.router, prefix="/games", tags=["Games"])
